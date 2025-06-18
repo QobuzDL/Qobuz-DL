@@ -52,6 +52,29 @@ npm i
 npm run dev
 ```
 
+## Docker Installation
+
+### 1. Clone the repo
+```bash
+git clone https://github.com/QobuzDL/Qobuz-DL.git
+```
+
+### 2. Navigate to the project directory
+```bash
+cd Qobuz-DL
+```
+
+### 3. Dockerfile build
+```bash
+docker build -t qobuz-dl .
+```
+
+### 4. Docker compose
+
+```bash
+docker-compose up -d
+```
+
 ### Setup .env (IMPORTANT)
 Before you can use Qobuz-DL, you need to change the .env file in the root directory. The default configuration will NOT work. QOBUZ_APP_ID and QOBUZ_SECRET must be set to the correct values. To find these you can use [this tool](https://github.com/QobuzDL/Qobuz-AppID-Secret-Tool).
 Additionally, in order to download files longer than 30 seconds, a valid Qobuz token is needed. This can be found in the localuser.token key of localstorage on the [official Qobuz website](https://play.qobuz.com/) for any paying members.
