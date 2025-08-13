@@ -9,6 +9,7 @@ import { FaGithub } from '@react-icons/all-files/fa/FaGithub';
 import { FFmpegProvider } from '@/lib/ffmpeg-provider';
 import { Inter } from 'next/font/google';
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import { SettingsProvider } from '@/lib/settings-provider';
 import { StatusBarProvider } from '@/lib/status-bar/context';
 import { ThemeProvider } from '@/components/theme-provider';
@@ -21,7 +22,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-    metadataBase: new URL('https://www.qobuz-dl.com/'), // Site URL
+    metadataBase: new URL('https://www.qobuz-dl.com/'),
     title: {
         default: process.env.NEXT_PUBLIC_APPLICATION_NAME + " - A frontend browser client for downloading music for Qobuz.",
         template: process.env.NEXT_PUBLIC_APPLICATION_NAME!
@@ -99,9 +100,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                             </ThemeProvider>
                         </SettingsProvider>
                     </StatusBarProvider>
-                    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.9.7/dist/ffmpeg.min.js"></script>
-                    <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
                 </FFmpegProvider>
+                <Script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js" strategy="beforeInteractive" />
+                <Script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js" strategy="beforeInteractive" />
             </body>
         </html>
     );
