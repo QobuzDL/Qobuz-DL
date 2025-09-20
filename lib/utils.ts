@@ -29,6 +29,21 @@ export const cleanFileName = (filename: string) => {
   return filename
 }
 
+export const cleanFolderPath = (folderPath: string) => {
+  // For folder paths, we want to preserve '/' for hierarchy but clean other chars
+  // Split by '/' to preserve hierarchy, clean each segment, then rejoin
+  return folderPath
+    .split('/')
+    .map(segment => {
+      const bannedChars = ['\\', '?', ':', '*', '"', '<', '>', '|']
+      for (const char of bannedChars) {
+        segment = segment.replaceAll(char, '_')
+      }
+      return segment
+    })
+    .join('/')
+}
+
 export function getTailwindBreakpoint(width: any) {
   if (width >= 1536) {
     return '2xl'

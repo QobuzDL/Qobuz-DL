@@ -41,3 +41,7 @@ next-env.d.ts
 # environment
 .env*
 !.env.example
+
+downloads/
+
+UPDATES.md

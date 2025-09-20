@@ -3,7 +3,7 @@ import { Button, ButtonProps } from './ui/button'
 import { DownloadIcon, FileArchiveIcon, MusicIcon } from 'lucide-react'
 import { StatusBarProps } from './status-bar/status-bar'
 import { FFmpegType } from '@/lib/ffmpeg-functions'
-import { SettingsProps } from '@/lib/settings-provider'
+import { SettingsProps, useSettings } from '@/lib/settings-provider'
 import { FetchedQobuzAlbum, formatTitle, getFullAlbumInfo, QobuzAlbum } from '@/lib/qobuz-dl'
 import { createDownloadJob } from '@/lib/download-job'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu'
@@ -41,10 +41,45 @@ const DownloadButton = React.forwardRef<HTMLButtonElement, DownloadAlbumButtonPr
     ref
   ) => {
     const [open, setOpen] = useState(false)
+    const { enableServerDownloads } = useSettings()
+    
     useEffect(() => {
       if (open) onOpen?.()
       else onClose?.()
     })
+    // If server downloads are globally enabled AND user has enabled them, show simple button without dropdown
+    console.log('DownloadButton - enableServerDownloads:', enableServerDownloads, 'settings.serverSideDownloads:', settings.serverSideDownloads)
+    const shouldUseServerDownloads = enableServerDownloads && settings.serverSideDownloads
+    if (shouldUseServerDownloads) {
+      console.log('DownloadButton - Using server download path!')
+      return (
+        <Button 
+          className={className} 
+          ref={ref} 
+          variant={variant} 
+          size={size} 
+          asChild={asChild} 
+          onClick={() => {
+            console.log('DownloadButton - Server download clicked, settings:', settings)
+            createDownloadJob(
+              result,
+              setStatusBar,
+              ffmpegState,
+              settings,
+              toast,
+              fetchedAlbumData,
+              setFetchedAlbumData
+            )
+            toast({ title: `Added '${formatTitle(result)}'`, description: 'The album has been added to the server download queue' })
+          }}
+          {...props}
+        >
+          <DownloadIcon className='!size-4' />
+        </Button>
+      )
+    }
+
+    console.log('DownloadButton - Using client download path (dropdown). Server downloads globally enabled:', enableServerDownloads, 'but user preference is:', settings.serverSideDownloads)
     return (
       <>
         <DropdownMenu open={open} onOpenChange={setOpen}>

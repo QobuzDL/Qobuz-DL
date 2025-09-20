@@ -44,6 +44,10 @@ const ReleaseCard = ({
   const { ffmpegState } = useFFmpeg()
   const { setStatusBar } = useStatusBar()
   const { settings } = useSettings()
+  
+  // Debug settings
+  console.log('ReleaseCard - settings from useSettings():', settings)
+  console.log('ReleaseCard - serverSideDownloads:', settings?.serverSideDownloads)
 
   const [openTracklist, setOpenTracklist] = useState(false)
   const [fetchedAlbumData, setFetchedAlbumData] = useState<FetchedQobuzAlbum | null>(null)
@@ -135,6 +139,8 @@ const ReleaseCard = ({
                     size='icon'
                     variant='ghost'
                     onClick={async () => {
+                      console.log('ReleaseCard - Single track download clicked!')
+                      console.log('ReleaseCard - Settings passed to createDownloadJob:', settings)
                       await createDownloadJob(
                         result as QobuzTrack,
                         setStatusBar,

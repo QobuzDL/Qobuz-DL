@@ -2,7 +2,7 @@ import axios, { AxiosError } from 'axios'
 import saveAs from 'file-saver'
 import { applyMetadata, codecMap, FFmpegType, fixMD5Hash, loadFFmpeg } from './ffmpeg-functions'
 import { artistReleaseCategories } from '@/components/artist-dialog'
-import { cleanFileName, formatBytes, formatCustomTitle, resizeImage } from './utils'
+import { cleanFileName, cleanFolderPath, formatBytes, formatCustomTitle, resizeImage } from './utils'
 import { createJob } from './status-bar/jobs'
 import { Disc3Icon, DiscAlbumIcon } from 'lucide-react'
 import {
@@ -17,6 +17,20 @@ import { SettingsProps } from './settings-provider'
 import { StatusBarProps } from '@/components/status-bar/status-bar'
 import { ToastAction } from '@/components/ui/toast'
 import { zipSync } from 'fflate'
+
+// Helper function to check if server downloads are globally enabled
+const isServerDownloadsEnabled = async (): Promise<boolean> => {
+  try {
+    const response = await fetch('/api/server-config')
+    if (response.ok) {
+      const serverConfig = await response.json()
+      return serverConfig.success && serverConfig.data.enableServerDownloads
+    }
+  } catch (error) {
+    console.warn('Failed to fetch server config:', error)
+  }
+  return false
+}
 
 export const createDownloadJob = async (
   result: QobuzAlbum | QobuzTrack,
@@ -86,9 +100,9 @@ export const createDownloadJob = async (
           const audioElement = document.createElement('audio')
           audioElement.id = `track_${result.id}`
           audioElement.src = objectURL
-          audioElement.onloadedmetadata = function () {
+          audioElement.onloadedmetadata = async function () {
             if (audioElement.duration >= result.duration) {
-              proceedDownload(objectURL, title)
+              await proceedDownload(objectURL, title, settings, toast)
               resolve()
             } else {
               toast({
@@ -98,8 +112,8 @@ export const createDownloadJob = async (
                 action: (
                   <ToastAction
                     altText='Copy Stack'
-                    onClick={() => {
-                      proceedDownload(objectURL, title)
+                    onClick={async () => {
+                      await proceedDownload(objectURL, title, settings, toast)
                     }}
                   >
                     Download anyway
@@ -128,7 +142,16 @@ export const createDownloadJob = async (
       })
     })
   } else {
-    const formattedZipTitle = formatCustomTitle(settings.zipName, result as QobuzAlbum)
+    // Check if server downloads are globally enabled before using user preference
+    const serverDownloadsEnabled = await isServerDownloadsEnabled()
+    const shouldUseServerDownloads = serverDownloadsEnabled && settings.serverSideDownloads
+    
+    // For server downloads, use folderName instead of zipName since we're creating folders, not zips
+    const folderSetting = shouldUseServerDownloads ? settings.folderName : settings.zipName
+    console.log('Album download - serverDownloadsEnabled:', serverDownloadsEnabled, 'userPreference:', settings.serverSideDownloads, 'shouldUse:', shouldUseServerDownloads)
+    console.log('Album download - using setting:', folderSetting)
+    const formattedZipTitle = formatCustomTitle(folderSetting, result as QobuzAlbum)
+    console.log('Album download - formattedZipTitle:', formattedZipTitle)
 
     await createJob(setStatusBar, formattedZipTitle, DiscAlbumIcon, async () => {
       return new Promise(async (resolve) => {
@@ -253,14 +276,57 @@ export const createDownloadJob = async (
             )
           } as { [key: string]: Uint8Array }
           if (albumArt === false) delete zipFiles['cover.jpg']
-          const zippedFile = zipSync(zipFiles, { level: 0 })
-          const zipBlob = new Blob([zippedFile as BlobPart], { type: 'application/zip' })
-          setStatusBar((prev) => ({ ...prev, progress: 100 }))
-          const objectURL = URL.createObjectURL(zipBlob)
-          saveAs(objectURL, formattedZipTitle + '.zip')
-          setTimeout(() => {
-            URL.revokeObjectURL(objectURL)
-          }, 100)
+          if (shouldUseServerDownloads) {
+            // Save individual files to server instead of ZIP
+            setStatusBar((prev) => ({ ...prev, description: 'Saving files to server...', progress: 90 }))
+            
+            let savedCount = 0
+            const totalFiles = Object.keys(zipFiles).length
+            
+            for (const [filename, fileData] of Object.entries(zipFiles)) {
+              try {
+                const blob = new Blob([fileData])
+                const formData = new FormData()
+                formData.append('file', blob, filename)
+                formData.append('filename', filename)
+                formData.append('output_path', `${settings.serverDownloadPath || 'downloads'}/${cleanFolderPath(formattedZipTitle)}`)
+                
+                const saveResponse = await fetch('/api/save-to-server', {
+                  method: 'POST',
+                  body: formData
+                })
+                
+                if (saveResponse.ok) {
+                  savedCount++
+                  setStatusBar((prev) => ({ 
+                    ...prev, 
+                    progress: 90 + Math.floor((savedCount / totalFiles) * 10)
+                  }))
+                } else {
+                  console.error(`Failed to save ${filename} to server:`, await saveResponse.text())
+                }
+              } catch (error) {
+                console.error(`Error saving ${filename} to server:`, error)
+              }
+            }
+            
+            setStatusBar((prev) => ({ ...prev, progress: 100 }))
+            // Show success toast for album server download
+            toast({
+              title: 'Album Download Complete',
+              description: `Successfully saved "${formattedZipTitle}" to server (${savedCount}/${totalFiles} files)`
+            })
+          } else {
+            // Original ZIP download behavior
+            const zippedFile = zipSync(zipFiles, { level: 0 })
+            const zipBlob = new Blob([zippedFile as BlobPart], { type: 'application/zip' })
+            setStatusBar((prev) => ({ ...prev, progress: 100 }))
+            const objectURL = URL.createObjectURL(zipBlob)
+            saveAs(objectURL, formattedZipTitle + '.zip')
+            setTimeout(() => {
+              URL.revokeObjectURL(objectURL)
+            }, 100)
+          }
           resolve()
         } catch (e) {
           if (e instanceof AxiosError && e.code === 'ERR_CANCELED') resolve()
@@ -282,8 +348,48 @@ export const createDownloadJob = async (
   }
 }
 
-function proceedDownload(objectURL: string, title: string) {
-  saveAs(objectURL, title)
+async function proceedDownload(objectURL: string, title: string, settings?: SettingsProps, toast?: (toast: any) => void) {
+  // Check if server downloads are globally enabled before using user preference
+  const serverDownloadsEnabled = await isServerDownloadsEnabled()
+  const shouldUseServerDownloads = serverDownloadsEnabled && settings?.serverSideDownloads
+  
+  if (shouldUseServerDownloads) {
+    // Save to server instead of browser download
+    try {
+      const response = await fetch(objectURL)
+      const blob = await response.blob()
+      
+      const formData = new FormData()
+      formData.append('file', blob, title)
+      formData.append('filename', title)
+      formData.append('output_path', settings.serverDownloadPath || 'downloads')
+      
+      const saveResponse = await fetch('/api/save-to-server', {
+        method: 'POST',
+        body: formData
+      })
+      
+      if (saveResponse.ok) {
+        console.log('File saved to server:', title)
+        toast?.({
+          title: 'Download Complete',
+          description: `Successfully saved "${title}" to server`
+        })
+      } else {
+        console.error('Failed to save to server:', await saveResponse.text())
+        toast?.({
+          title: 'Server Save Failed',
+          description: `Failed to save "${title}" to server`
+        })
+      }
+    } catch (error) {
+      console.error('Error saving to server:', error)
+    }
+  } else {
+    // Original browser download behavior
+    saveAs(objectURL, title)
+  }
+  
   setTimeout(() => {
     URL.revokeObjectURL(objectURL)
   }, 100)

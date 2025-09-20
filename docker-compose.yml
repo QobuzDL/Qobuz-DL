@@ -1,7 +1,9 @@
 services:
  qobuz-dl:
     container_name: qobuz-dl
-    image: qobuz-dl
+    build: .
     ports:
-     - 3000:3000
+     - "3000:3000"
+    volumes:
+     - "./downloads:/app/downloads"  # Mount local downloads folder to container
     restart: unless-stopped

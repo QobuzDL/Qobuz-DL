@@ -28,7 +28,7 @@ const qualityMap = {
 }
 
 const SettingsForm = () => {
-  const { settings, setSettings, resetSettings } = useSettings()
+  const { settings, setSettings, resetSettings, enableServerDownloads } = useSettings()
 
   const [open, setOpen] = useState(false)
 
@@ -371,6 +371,84 @@ const SettingsForm = () => {
               <p>{Math.round(settings.albumArtQuality * 100)}%</p>
             </div>
           </SheetHeader>
+          {enableServerDownloads && (
+            <>
+              <Separator />
+              <SheetHeader>
+                <div className='flex flex-col gap-4'>
+                  <div className='flex flex-col'>
+                    <p className='font-medium'>Server-Side Downloads</p>
+                    <p className='text-xs text-muted-foreground'>
+                      When enabled, files will be saved directly to the server instead of downloaded to your browser.
+                    </p>
+                  </div>
+                  <div className='flex items-center gap-2'>
+                    <p className='font-medium text-sm'>Enable Server Downloads</p>
+                    <Checkbox
+                      checked={settings.serverSideDownloads}
+                      onCheckedChange={(checked: boolean) => 
+                        setSettings((settings) => ({ ...settings, serverSideDownloads: checked }))
+                      }
+                    />
+                  </div>
+                  {settings.serverSideDownloads && (
+                    <div className='space-y-4'>
+                      <div className='space-y-2'>
+                        <p className='font-medium text-sm'>Server Download Path</p>
+                        <Input
+                          placeholder='downloads'
+                          value={settings.serverDownloadPath}
+                          onChange={(e) => 
+                            setSettings((prev) => ({ ...prev, serverDownloadPath: e.target.value }))
+                          }
+                        />
+                        <p className='text-xs text-muted-foreground'>
+                          Path on the server where downloads will be saved. Make sure this directory exists and is writable.
+                        </p>
+                      </div>
+                      <div className='space-y-2'>
+                        <p className='font-medium text-sm'>Folder Naming</p>
+                        <div className='flex gap-2'>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button size='icon' className='aspect-square' variant='outline'>
+                                <InfoIcon />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Folder Naming</DialogTitle>
+                                <DialogDescription>The variables used in the folder name for server downloads</DialogDescription>
+                              </DialogHeader>
+                              <p className='text-xs text-muted-foreground'>An example is {'{artists} - {name}'}</p>
+                              <div className='flex flex-col gap-2'>
+                                {nameVariables.map((variable, index) => (
+                                  <div key={index} className='flex text-sm items-center justify-between gap-2'>
+                                    <p>
+                                      <span className='capitalize'>{variable}</span>{' '}
+                                      <span className='text-muted-foreground'>{`{${variable}}`}</span>
+                                    </p>
+                                    <p>{settings.folderName.includes(variable) ? 'Currently used' : 'Not used'}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                          <Input
+                            value={settings.folderName}
+                            onChange={(e) => setSettings((prev) => ({ ...prev, folderName: e.target.value }))}
+                          />
+                        </div>
+                        <p className='text-xs text-muted-foreground'>
+                          Pattern used for album folder names when downloading to server.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </SheetHeader>
+            </>
+          )}
           <Button variant='destructive' onClick={resetSettings}>
             Reset Settings
           </Button>
