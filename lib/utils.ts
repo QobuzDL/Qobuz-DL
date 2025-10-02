@@ -92,3 +92,8 @@ export function formatCustomTitle(titleSetting: string, result: QobuzAlbum | Qob
         .replaceAll('{year}', String(new Date(result.released_at * 1000).getFullYear()))
         .replaceAll('{duration}', String(formatDuration(result.duration)));
 }
+
+export function getRandomItem<T = unknown>(array: T[] | undefined) {
+    if (!array) return undefined;
+    return array[Math.floor(Math.random() * array.length)];
+}

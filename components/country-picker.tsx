@@ -7,7 +7,7 @@ import axios from 'axios';
 import { ChevronDownIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const CountryPicker = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => {
+const CountryPicker = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(function CountryPicker({ className, ...props }, ref) {
     const { country, setCountry } = useCountry();
     const [countriesList, setCountriesList] = useState<string[]>([]);
     const [open, setOpen] = useState(false);

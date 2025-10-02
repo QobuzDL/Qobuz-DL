@@ -22,5 +22,13 @@
             "Added PWA support for easy access of the site on a mobile device for example with the abilty to add to the homescreen",
             "Changed the border radius style to slightly more rounded, :)"
         ]
+    },
+    {
+        "title": "Sample files and more icons",
+        "date": "01-09-2025",
+        "changes": [
+            "Added an error message explaining sample files provided by Qobuz",
+            "Added more icons to track items"
+        ]
     }
 ]

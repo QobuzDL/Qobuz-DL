@@ -10,11 +10,11 @@ import { ScrollArea } from './scroll-area';
 
 type ChangeLog = {
     title: string;
-    date: Date | string;
+    date: string;
     changes: string[];
 };
 
-const ChangelogDialog = () => {
+export function ChangelogDialog() {
     const [open, setOpen] = useState<boolean>(false);
 
     const [logs, setLogs] = useState<ChangeLog[]>([]);
@@ -22,10 +22,8 @@ const ChangelogDialog = () => {
 
     const fetchChangelog = async () => {
         try {
-            const response = await axios.get(
-                `${(process.env.NEXT_PUBLIC_GITHUB || 'https://github.com/QobuzDL/Qobuz-DL').replace('github.com', 'raw.githubusercontent.com')}/refs/heads/main/changelog.json`
-            );
-            const data = await response.data;
+            const response = await axios.get('/api/changelog');
+            const data = ((await response.data) as ChangeLog[]).sort((a, b) => parseInt(a.date) - parseInt(b.date));
             setLogs(data);
         } catch {
             setLogs([]);
@@ -103,6 +101,6 @@ const ChangelogDialog = () => {
             </DialogContent>
         </Dialog>
     );
-};
+}
 
 export default ChangelogDialog;

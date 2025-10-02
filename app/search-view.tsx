@@ -46,18 +46,7 @@ const SearchView = () => {
     const { settings } = useSettings();
     const { country } = useCountry();
 
-    useEffect(() => {
-        console.log(`%c${process.env.NEXT_PUBLIC_APPLICATION_NAME}`, 'font-size: 25px; font-weight: bold;');
-        if (process.env.NEXT_PUBLIC_DISCORD) {
-            console.log(`Discord: ${process.env.NEXT_PUBLIC_DISCORD}`);
-        }
-        if (process.env.NEXT_PUBLIC_GITHUB) {
-            console.log(`GitHub: ${process.env.NEXT_PUBLIC_GITHUB}`);
-        }
-    }, []);
-
     const FilterIcon = filterData.find((fd) => fd.value == searchField)?.icon || Disc3Icon;
-
     const [scrollTrigger, isInView] = useInView();
 
     const fetchMore = () => {

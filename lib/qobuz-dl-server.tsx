@@ -1,6 +1,7 @@
-import { getTokenForCountry, tokenCountriesMap } from '@/config/token-countries';
+import { defaultCountry, getTokenForCountry, tokenStore } from '@/config/token-countries';
 import { APIOptionProps, QobuzArtist, QobuzSearchResults } from './qobuz-dl';
 import axios from 'axios';
+import { getRandomItem } from './utils';
 
 // Functions only to be used by servers
 // Do not import this file into the client
@@ -25,14 +26,13 @@ export function testForRequirements() {
 }
 
 export function getRandomToken() {
-    if (tokenCountriesMap.length > 0) return tokenCountriesMap[0].token;
-    return JSON.parse(process.env.QOBUZ_AUTH_TOKENS!)[Math.floor(Math.random() * JSON.parse(process.env.QOBUZ_AUTH_TOKENS!).length)] as string;
+    return getRandomItem(tokenStore[defaultCountry]) as string;
 }
 
 export async function search(query: string, limit: number = 10, offset: number = 0, options?: APIOptionProps) {
     testForRequirements();
     const { country, ...requestOptions } = options || {};
-    const token = country ? getTokenForCountry(country) : getRandomToken();
+    const token = getTokenForCountry(country);
 
     // Test if query is a Qobuz URL
     let id: string | null = null;
@@ -75,7 +75,7 @@ export async function search(query: string, limit: number = 10, offset: number =
 export async function getArtist(artistId: string, options?: APIOptionProps): Promise<QobuzArtist | null> {
     testForRequirements();
     const { country, ...requestOptions } = options || {};
-    const token = country ? getTokenForCountry(country) : getRandomToken();
+    const token = getTokenForCountry(country);
 
     const url = new URL(process.env.QOBUZ_API_BASE + '/artist/page');
     let proxyAgent = undefined;
@@ -107,7 +107,7 @@ export async function getArtistReleases(
 ) {
     testForRequirements();
     const { country, ...requestOptions } = options || {};
-    const token = country ? getTokenForCountry(country) : getRandomToken();
+    const token = getTokenForCountry(country);
 
     const url = new URL(process.env.QOBUZ_API_BASE + 'artist/getReleasesList');
     url.searchParams.append('artist_id', artist_id);
@@ -136,7 +136,7 @@ export async function getArtistReleases(
 export async function getAlbumInfo(album_id: string, options?: APIOptionProps) {
     testForRequirements();
     const { country, ...requestOptions } = options || {};
-    const token = country ? getTokenForCountry(country) : getRandomToken();
+    const token = getTokenForCountry(country);
 
     const url = new URL(process.env.QOBUZ_API_BASE + 'album/get');
     url.searchParams.append('album_id', album_id);
@@ -161,7 +161,7 @@ export async function getAlbumInfo(album_id: string, options?: APIOptionProps) {
 export async function getDownloadURL(trackID: number, quality: string, options?: APIOptionProps) {
     testForRequirements();
     const { country, ...requestOptions } = options || {};
-    const token = country ? getTokenForCountry(country) : getRandomToken();
+    const token = getTokenForCountry(country);
 
     const timestamp = Math.floor(new Date().getTime() / 1000);
     const r_sig = `trackgetFileUrlformat_id${quality}intentstreamtrack_id${trackID}${timestamp}${process.env.QOBUZ_SECRET}`;
