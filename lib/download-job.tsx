@@ -5,14 +5,14 @@ import { artistReleaseCategories } from '@/components/artist-dialog';
 import { cleanFileName, formatBytes, formatCustomTitle, resizeImage } from './utils';
 import { createJob } from './status-bar/jobs';
 import { Disc3Icon, DiscAlbumIcon } from 'lucide-react';
-import { FetchedQobuzAlbum, formatTitle, getFullResImageUrl, QobuzAlbum, QobuzArtistResults, QobuzTrack } from './qobuz-dl';
+import { FetchedQobuzAlbum, formatTitle, getFullResImageUrl, QobuzAlbum, QobuzArtistResults, QobuzPlaylist, QobuzTrack } from './qobuz-dl';
 import { SettingsProps } from './settings-provider';
 import { StatusBarProps } from '@/components/status-bar/status-bar';
 import { ToastAction } from '@/components/ui/toast';
 import { zipSync } from 'fflate';
 
 export const createDownloadJob = async (
-    result: QobuzAlbum | QobuzTrack,
+    result: QobuzAlbum | QobuzTrack | QobuzPlaylist,
     setStatusBar: React.Dispatch<React.SetStateAction<StatusBarProps>>,
     ffmpegState: FFmpegType,
     settings: SettingsProps,
@@ -21,7 +21,9 @@ export const createDownloadJob = async (
     setFetchedAlbumData?: React.Dispatch<React.SetStateAction<FetchedQobuzAlbum | null>>,
     country?: string
 ) => {
+    const isPlaylist = 'owner' in result;
     if ((result as QobuzTrack).album) {
+        // Single track download
         const formattedTitle = formatCustomTitle(settings.trackName, result as QobuzTrack);
         await createJob(setStatusBar, formattedTitle, Disc3Icon, async () => {
             return new Promise(async (resolve) => {
@@ -121,7 +123,8 @@ export const createDownloadJob = async (
             });
         });
     } else {
-        const formattedZipTitle = formatCustomTitle(settings.zipName, result as QobuzAlbum);
+        // Album or Playlist download
+        const formattedZipTitle = isPlaylist ? (result as QobuzPlaylist).name : formatCustomTitle(settings.zipName, result as QobuzAlbum);
 
         await createJob(setStatusBar, formattedZipTitle, DiscAlbumIcon, async () => {
             return new Promise(async (resolve) => {
@@ -144,8 +147,22 @@ export const createDownloadJob = async (
                         !((settings.outputQuality === '27' && settings.outputCodec === 'FLAC') || (settings.bitrate === 320 && settings.outputCodec === 'MP3'))
                     )
                         await loadFFmpeg(ffmpegState, signal);
-                    setStatusBar((prev) => ({ ...prev, description: 'Fetching album data...' }));
-                    if (!fetchedAlbumData) {
+                    setStatusBar((prev) => ({ ...prev, description: isPlaylist ? 'Fetching playlist data...' : 'Fetching album data...' }));
+                    
+                    let playlistData: QobuzPlaylist | null = null;
+                    
+                    if (isPlaylist) {
+                        const playlistResponse = await axios.get('/api/get-playlist', {
+                            params: { playlist_id: (result as QobuzPlaylist).id },
+                            headers: { 'Token-Country': country },
+                            signal
+                        });
+                        if (playlistResponse.data.success && playlistResponse.data.data.playlists) {
+                            playlistData = playlistResponse.data.data.playlists.items[0];
+                        } else {
+                            playlistData = playlistResponse.data.data;
+                        }
+                    } else if (!fetchedAlbumData) {
                         const albumDataResponse = await axios.get('/api/get-album', {
                             params: { album_id: (result as QobuzAlbum).id },
                             headers: { 'Token-Country': country },
@@ -156,44 +173,131 @@ export const createDownloadJob = async (
                         }
                         fetchedAlbumData = albumDataResponse.data.data;
                     }
-                    const albumTracks = fetchedAlbumData!.tracks.items.map((track: QobuzTrack) => ({
-                        ...track,
-                        album: fetchedAlbumData
-                    })) as QobuzTrack[];
+                    
+                    const albumTracks = isPlaylist
+                        ? playlistData!.tracks.items.map((track: QobuzTrack) => {
+                            if (!track.album) {
+                                return {
+                                    ...track,
+                                    album: {
+                                        title: playlistData!.name,
+                                        artists: [],
+                                        artist: { name: track.performer?.name || 'Various Artists', id: 0, albums_count: 0, image: null }
+                                    } as any
+                                };
+                            }
+                            return track;
+                        })
+                        : fetchedAlbumData!.tracks.items.map((track: QobuzTrack) => ({
+                              ...track,
+                              album: fetchedAlbumData
+                          })) as QobuzTrack[];
+                    
                     let totalAlbumSize = 0;
-                    const albumUrls = [] as string[];
-                    setStatusBar((prev) => ({ ...prev, description: 'Fetching album size...' }));
-                    let currentDisk = 1;
-                    let trackOffset = 0;
+                    const trackUrlMap = new Map<number, string>();
+                    setStatusBar((prev) => ({ ...prev, description: isPlaylist ? 'Fetching playlist size...' : 'Fetching album size...' }));
+                    
                     for (const [index, track] of albumTracks.entries()) {
-                        if (track.streamable) {
-                            const fileURLResponse = await axios.get('/api/download-music', {
-                                params: { track_id: track.id, quality: settings.outputQuality },
-                                headers: { 'Token-Country': country },
-                                signal
-                            });
-                            const trackURL = fileURLResponse.data.data.url;
-                            if (!(currentDisk === track.media_number)) {
-                                trackOffset = albumUrls.length;
-                                currentDisk = track.media_number;
-                                albumUrls.push(trackURL);
-                            } else albumUrls[track.track_number + trackOffset - 1] = trackURL;
-                            const fileSizeResponse = await axios.head(trackURL, { signal });
-                            setStatusBar((statusBar) => ({
-                                ...statusBar,
-                                progress: (100 / albumTracks.length) * (index + 1)
-                            }));
-                            const fileSize = parseInt(fileSizeResponse.headers['content-length']);
-                            totalAlbumSize += fileSize;
+                        if (track && track.streamable) {
+                            try {
+                                const fileURLResponse = await axios.get('/api/download-music', {
+                                    params: { track_id: track.id, quality: settings.outputQuality },
+                                    headers: { 'Token-Country': country },
+                                    signal
+                                });
+                                const trackURL = fileURLResponse.data.data.url;
+                                trackUrlMap.set(index, trackURL);
+                                
+                                const fileSizeResponse = await axios.head(trackURL, { signal });
+                                setStatusBar((statusBar) => ({
+                                    ...statusBar,
+                                    progress: (100 / albumTracks.length) * (index + 1)
+                                }));
+                                const fileSize = parseInt(fileSizeResponse.headers['content-length']);
+                                totalAlbumSize += fileSize;
+                            } catch (e) {
+                                console.warn(`Failed to get URL for track ${index}:`, e);
+                            }
                         }
                     }
+                    
+                    // Fetch album art
+                    let albumArt: ArrayBuffer | false = false;
+                    if (isPlaylist) {
+                        const playlistImages = (result as QobuzPlaylist).images;
+                        if (playlistImages && playlistImages.length > 0) {
+                            try {
+                                const response = await axios.get(playlistImages[0], { responseType: 'arraybuffer', signal });
+                                albumArt = response.data;
+                            } catch (e) {
+                                console.warn('Failed to fetch playlist art:', e);
+                            }
+                        }
+                    } else {
+                        const albumArtURL = await resizeImage(getFullResImageUrl(fetchedAlbumData!), settings.albumArtSize, settings.albumArtQuality);
+                        if (albumArtURL) {
+                            try {
+                                const response = await axios.get(albumArtURL, { responseType: 'arraybuffer', signal });
+                                albumArt = response.data;
+                            } catch (e) {
+                                console.warn('Failed to fetch album art:', e);
+                            }
+                        }
+                    }
+                    
+                    // Check if playlist is too large for ZIP (>1.5GB)
+                    const estimatedZipSize = totalAlbumSize * 1.1;
+                    if (isPlaylist && estimatedZipSize > 1500000000) {
+                        // Download tracks individually for large playlists
+                        toast({
+                            title: 'Large Playlist',
+                            description: 'Downloading tracks individually due to size'
+                        });
+                        
+                        setStatusBar((prev) => ({ ...prev, progress: 0 }));
+                        let completed = 0;
+                        
+                        for (const [index, url] of trackUrlMap.entries()) {
+                            if (cancelled) break;
+                            const track = albumTracks[index];
+                            if (url && track) {
+                                try {
+                                    const response = await axios.get(url, { responseType: 'arraybuffer', signal });
+                                    let outputFile = await applyMetadata(response.data, track, ffmpegState, settings, undefined, albumArt);
+                                    if (settings.outputCodec === 'FLAC' && settings.fixMD5) {
+                                        outputFile = await (await fixMD5Hash(outputFile)).arrayBuffer();
+                                    }
+                                    const fileName = `${(index + 1).toString().padStart(2, '0')} ${formatCustomTitle(settings.trackName, track)}.${codecMap[settings.outputCodec].extension}`;
+                                    saveAs(URL.createObjectURL(new Blob([outputFile])), cleanFileName(fileName));
+                                    completed++;
+                                    setStatusBar((prev) => ({
+                                        ...prev,
+                                        progress: Math.floor((completed / trackUrlMap.size) * 100),
+                                        description: `Downloaded ${completed}/${trackUrlMap.size} tracks`
+                                    }));
+                                    await new Promise(r => setTimeout(r, 500));
+                                } catch (e) {
+                                    console.error(`Failed track ${index}:`, e);
+                                }
+                            }
+                        }
+                        
+                        if (albumArt !== false) {
+                            saveAs(URL.createObjectURL(new Blob([albumArt], { type: 'image/jpeg' })), 'cover.jpg');
+                        }
+                        
+                        setStatusBar((prev) => ({ ...prev, progress: 100 }));
+                        resolve();
+                        return;
+                    }
+                    
+                    // Download and ZIP for smaller playlists/albums
                     const trackBuffers = [] as ArrayBuffer[];
                     let totalBytesDownloaded = 0;
-                    setStatusBar((statusBar) => ({ ...statusBar, progress: 0, description: `Fetching album art...` }));
-                    const albumArtURL = await resizeImage(getFullResImageUrl(fetchedAlbumData!), settings.albumArtSize, settings.albumArtQuality);
-                    const albumArt = albumArtURL ? (await axios.get(albumArtURL, { responseType: 'arraybuffer' })).data : false;
-                    for (const [index, url] of albumUrls.entries()) {
-                        if (url) {
+                    setStatusBar((prev) => ({ ...prev, progress: 0 }));
+                    
+                    for (const [index, url] of trackUrlMap.entries()) {
+                        if (url && albumTracks[index]) {
                             const response = await axios.get(url, {
                                 responseType: 'arraybuffer',
                                 onDownloadProgress: (progressEvent) => {
@@ -210,31 +314,34 @@ export const createDownloadJob = async (
                                 },
                                 signal
                             });
-                            await new Promise((resolve) => setTimeout(resolve, 100));
+                            await new Promise((r) => setTimeout(r, 100));
                             totalBytesDownloaded += response.data.byteLength;
-                            const inputFile = response.data;
-                            let outputFile = await applyMetadata(
-                                inputFile,
-                                albumTracks[index],
-                                ffmpegState,
-                                settings,
-                                undefined,
-                                albumArt,
-                                fetchedAlbumData!.upc
-                            );
-                            if (settings.outputCodec === 'FLAC' && settings.fixMD5) outputFile = await (await fixMD5Hash(outputFile)).arrayBuffer();
-                            trackBuffers[index] = outputFile;
+                            const currentTrack = albumTracks[index];
+                            if (currentTrack) {
+                                let outputFile = await applyMetadata(
+                                    response.data,
+                                    currentTrack,
+                                    ffmpegState,
+                                    settings,
+                                    undefined,
+                                    albumArt,
+                                    isPlaylist ? undefined : fetchedAlbumData!.upc
+                                );
+                                if (settings.outputCodec === 'FLAC' && settings.fixMD5) outputFile = await (await fixMD5Hash(outputFile)).arrayBuffer();
+                                trackBuffers[index] = outputFile;
+                            }
                         }
                     }
-                    setStatusBar((statusBar) => ({ ...statusBar, progress: 0, description: `Zipping album...` }));
-                    await new Promise((resolve) => setTimeout(resolve, 500));
+                    
+                    setStatusBar((prev) => ({ ...prev, progress: 0, description: 'Creating ZIP...' }));
+                    await new Promise((r) => setTimeout(r, 500));
+                    
                     const zipFiles = {
-                        'cover.jpg': new Uint8Array(albumArt),
+                        ...(albumArt !== false ? { 'cover.jpg': new Uint8Array(albumArt) } : {}),
                         ...trackBuffers.reduce(
                             (acc, buffer, index) => {
                                 if (buffer) {
-                                    const fileName = `${(index + 1).toString().padStart(Math.max(String(albumTracks.length - 1).length, 2), '0')} ${formatCustomTitle(settings.trackName, albumTracks[index])}.${codecMap[settings.outputCodec].extension}`;
-
+                                    const fileName = `${(index + 1).toString().padStart(2, '0')} ${formatCustomTitle(settings.trackName, albumTracks[index])}.${codecMap[settings.outputCodec].extension}`;
                                     acc[cleanFileName(fileName)] = new Uint8Array(buffer);
                                 }
                                 return acc;
@@ -242,15 +349,11 @@ export const createDownloadJob = async (
                             {} as { [key: string]: Uint8Array }
                         )
                     } as { [key: string]: Uint8Array };
-                    if (albumArt === false) delete zipFiles['cover.jpg'];
+                    
                     const zippedFile = zipSync(zipFiles, { level: 0 });
                     const zipBlob = new Blob([zippedFile as BlobPart], { type: 'application/zip' });
                     setStatusBar((prev) => ({ ...prev, progress: 100 }));
-                    const objectURL = URL.createObjectURL(zipBlob);
-                    saveAs(objectURL, formattedZipTitle + '.zip');
-                    setTimeout(() => {
-                        URL.revokeObjectURL(objectURL);
-                    }, 100);
+                    saveAs(URL.createObjectURL(zipBlob), formattedZipTitle + '.zip');
                     resolve();
                 } catch (e) {
                     if (e instanceof AxiosError && e.code === 'ERR_CANCELED') resolve();
@@ -274,9 +377,7 @@ export const createDownloadJob = async (
 
 function proceedDownload(objectURL: string, title: string) {
     saveAs(objectURL, title);
-    setTimeout(() => {
-        URL.revokeObjectURL(objectURL);
-    }, 100);
+    setTimeout(() => URL.revokeObjectURL(objectURL), 100);
 }
 
 export async function downloadArtistDiscography(

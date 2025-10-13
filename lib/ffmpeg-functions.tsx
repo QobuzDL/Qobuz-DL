@@ -80,61 +80,78 @@ export async function applyMetadata(
     }
     if (!settings.applyMetadata) return trackBuffer;
     if (settings.outputCodec === 'WAV') return trackBuffer;
+    if (!resultData) return trackBuffer; // Safety check
     if (setStatusBar) setStatusBar((prev) => ({ ...prev, description: 'Applying metadata...' }));
-    const artists = resultData.album.artists === undefined ? [resultData.performer] : resultData.album.artists;
+    
+    // Build metadata string
     let metadata = `;FFMETADATA1`;
-    metadata += `\ntitle=${formatTitle(resultData)}`;
-    if (artists.length > 0) {
-        metadata += `\nartist=${formatArtists(resultData)}`;
-        metadata += `\nalbum_artist=${formatArtists(resultData)}`;
-    } else {
-        metadata += `\nartist=Various Artists`;
-        metadata += `\nalbum_artist=Various Artists`;
+    
+    // Title
+    const title = resultData.title || 'Unknown Track';
+    metadata += `\ntitle=${title}`;
+    
+    // Artist info
+    const artistName = resultData.performer?.name || 'Various Artists';
+    metadata += `\nartist=${artistName}`;
+    metadata += `\nalbum_artist=${artistName}`;
+    
+    // Album info - only if album exists
+    if (resultData.album) {
+        try {
+            metadata += `\nalbum=${formatTitle(resultData.album)}`;
+            if (resultData.album.genre) metadata += `\ngenre=${resultData.album.genre.name}`;
+            if (resultData.album.release_date_original) {
+                metadata += `\ndate=${resultData.album.release_date_original}`;
+                metadata += `\nyear=${new Date(resultData.album.release_date_original).getFullYear()}`;
+            }
+            const album = getAlbum(resultData);
+            if (album && album.label) metadata += `\nlabel=${album.label.name}`;
+        } catch (e) {
+            console.warn('Error adding album metadata:', e);
+        }
     }
-    metadata += `\nalbum_artist=${artists[0]?.name || resultData.performer?.name || 'Various Artists'}`;
-    metadata += `\nalbum=${formatTitle(resultData.album)}`;
-    metadata += `\ngenre=${resultData.album.genre.name}`;
-    metadata += `\ndate=${resultData.album.release_date_original}`;
-    metadata += `\nyear=${new Date(resultData.album.release_date_original).getFullYear()}`;
-    metadata += `\nlabel=${getAlbum(resultData).label.name}`;
-    metadata += `\ncopyright=${resultData.copyright}`;
+    
+    // Track info
+    if (resultData.copyright) metadata += `\ncopyright=${resultData.copyright}`;
     if (resultData.isrc) metadata += `\nisrc=${resultData.isrc}`;
     if (upc) metadata += `\nbarcode=${upc}`;
     if (resultData.track_number) metadata += `\ntrack=${resultData.track_number}`;
+    
     await ffmpeg.FS('writeFile', 'input.' + extension, new Uint8Array(trackBuffer));
     const encoder = new TextEncoder();
     await ffmpeg.FS('writeFile', 'metadata.txt', encoder.encode(metadata));
+    
+    // Handle album art
+    let hasAlbumArt = false;
     if (!(albumArt === false)) {
-        if (!albumArt) {
-            const albumArtURL = await resizeImage(getFullResImageUrl(resultData), settings.albumArtSize, settings.albumArtQuality);
-            if (albumArtURL) {
-                albumArt = (await axios.get(albumArtURL, { responseType: 'arraybuffer' })).data;
-            } else albumArt = false;
+        if (!albumArt && resultData.album) {
+            try {
+                const albumArtURL = await resizeImage(getFullResImageUrl(resultData), settings.albumArtSize, settings.albumArtQuality);
+                if (albumArtURL) {
+                    albumArt = (await axios.get(albumArtURL, { responseType: 'arraybuffer' })).data;
+                }
+            } catch (e) {
+                console.warn('Failed to fetch album art:', e);
+                albumArt = false;
+            }
         }
-        if (albumArt)
-            await ffmpeg.FS(
-                'writeFile',
-                'albumArt.jpg',
-                new Uint8Array(
-                    albumArt
-                        ? albumArt
-                        : (
-                              await axios.get((await resizeImage(getFullResImageUrl(resultData), settings.albumArtSize, settings.albumArtQuality)) as string, {
-                                  responseType: 'arraybuffer'
-                              })
-                          ).data
-                )
-            );
+        if (albumArt) {
+            await ffmpeg.FS('writeFile', 'albumArt.jpg', new Uint8Array(albumArt));
+            hasAlbumArt = true;
+        }
     }
 
     await ffmpeg.run('-i', 'input.' + extension, '-i', 'metadata.txt', '-map_metadata', '1', '-codec', 'copy', 'secondInput.' + extension);
-    if (['WAV', 'OPUS'].includes(settings.outputCodec) || albumArt === false) {
+    
+    if (['WAV', 'OPUS'].includes(settings.outputCodec) || !hasAlbumArt) {
         const output = await ffmpeg.FS('readFile', 'secondInput.' + extension);
         ffmpeg.FS('unlink', 'input.' + extension);
         ffmpeg.FS('unlink', 'metadata.txt');
         ffmpeg.FS('unlink', 'secondInput.' + extension);
+        if (hasAlbumArt) ffmpeg.FS('unlink', 'albumArt.jpg');
         return output;
     }
+    
     await ffmpeg.run(
         '-i',
         'secondInput.' + extension,

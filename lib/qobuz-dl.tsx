@@ -120,6 +120,33 @@ export type QobuzSearchResults = {
         total: number;
         items: QobuzArtist[];
     };
+    playlists: {
+        limit: number;
+        offset: number;
+        total: number;
+        items: QobuzPlaylist[];
+    };
+};
+
+export type QobuzPlaylist = {
+    id: number;
+    name: string;
+    description: string | null;
+    images: string[];
+    duration: number;
+    tracks_count: number;
+    users_count: number;
+    is_public: boolean;
+    owner: {
+        id: number;
+        name: string;
+    };
+    tracks: {
+        offset: number;
+        limit: number;
+        total: number;
+        items: QobuzTrack[];
+    };
 };
 
 export type QobuzArtistResults = {
@@ -169,17 +196,23 @@ export type FilterDataType = {
     icon: LucideIcon;
 }[];
 
-export type QobuzSearchFilters = 'albums' | 'tracks' | 'artists';
+export type QobuzSearchFilters = 'albums' | 'tracks' | 'artists' | 'playlists';
 
 export const QOBUZ_ALBUM_URL_REGEX = /https:\/\/(play|open)\.qobuz\.com\/album\/[a-zA-Z0-9]+/;
 export const QOBUZ_TRACK_URL_REGEX = /https:\/\/(play|open)\.qobuz\.com\/track\/\d+/;
 export const QOBUZ_ARTIST_URL_REGEX = /https:\/\/(play|open)\.qobuz\.com\/artist\/\d+/;
+export const QOBUZ_PLAYLIST_URL_REGEX = /https:\/\/(play|open)\.qobuz\.com\/playlist\/\d+/;
 
-export function getAlbum(input: QobuzAlbum | QobuzTrack | QobuzArtist) {
+export function getAlbum(input: QobuzAlbum | QobuzTrack | QobuzArtist | QobuzPlaylist) {
+    if ('owner' in input) return null;
     return ((input as QobuzAlbum).image ? input : (input as QobuzTrack).album) as QobuzAlbum;
 }
 
-export function formatTitle(input: QobuzAlbum | QobuzTrack | QobuzArtist) {
+export function formatTitle(input: QobuzAlbum | QobuzTrack | QobuzArtist | QobuzPlaylist) {
+    if (!input) return 'Unknown';
+    if ('owner' in input) {
+        return (input as QobuzPlaylist).name;
+    }
     return `${(input as QobuzAlbum | QobuzTrack).title ?? (input as QobuzArtist).name}${(input as QobuzAlbum | QobuzTrack).version ? ' (' + (input as QobuzAlbum | QobuzTrack).version + ')' : ''}`.trim();
 }
 
@@ -187,9 +220,14 @@ export function getFullResImageUrl(input: QobuzAlbum | QobuzTrack) {
     return getAlbum(input).image.large.substring(0, getAlbum(input).image.large.length - 7) + 'org.jpg';
 }
 
-export function formatArtists(input: QobuzAlbum | QobuzTrack, separator: string = ', ') {
-    return (getAlbum(input) as QobuzAlbum).artists && (getAlbum(input) as QobuzAlbum).artists.length > 0
-        ? (getAlbum(input) as QobuzAlbum).artists.map((artist) => artist.name).join(separator)
+export function formatArtists(input: QobuzAlbum | QobuzTrack | QobuzPlaylist, separator: string = ', ') {
+    if ('owner' in input) {
+        return (input as QobuzPlaylist).owner.name;
+    }
+    const album = getAlbum(input);
+    if (!album) return 'Various Artists';
+    return (album as QobuzAlbum).artists && (album as QobuzAlbum).artists.length > 0
+        ? (album as QobuzAlbum).artists.map((artist) => artist.name).join(separator)
         : (input as QobuzTrack).performer?.name || 'Various Artists';
 }
 
@@ -263,4 +301,15 @@ export async function getFullAlbumInfo(
     const albumDataResponse = await axios.get('/api/get-album', { params: { album_id: (result as QobuzAlbum).id }, headers: { 'Token-Country': country } });
     setFetchedAlbumData(albumDataResponse.data.data);
     return albumDataResponse.data.data;
+}
+
+export async function getPlaylistInfo(
+    playlist_id: string,
+    country?: string
+): Promise<QobuzPlaylist> {
+    const response = await axios.get('/api/get-playlist', {
+        params: { playlist_id },
+        headers: { 'Token-Country': country }
+    });
+    return response.data.data;
 }
