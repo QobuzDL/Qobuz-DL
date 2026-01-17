@@ -91,13 +91,14 @@ export async function applyMetadata(
         metadata += `\nartist=Various Artists`;
         metadata += `\nalbum_artist=Various Artists`;
     }
-    metadata += `\nalbum_artist=${artists[0]?.name || resultData.performer?.name || 'Various Artists'}`;
-    metadata += `\nalbum=${formatTitle(resultData.album)}`;
-    metadata += `\ngenre=${resultData.album.genre.name}`;
-    metadata += `\ndate=${resultData.album.release_date_original}`;
-    metadata += `\nyear=${new Date(resultData.album.release_date_original).getFullYear()}`;
-    metadata += `\nlabel=${getAlbum(resultData).label.name}`;
-    metadata += `\ncopyright=${resultData.copyright}`;
+    metadata += `\nalbum_artist=${artists[0]?.name || resultData.performer?.name || "Various Artists"}`
+    metadata += `\nalbum=${formatTitle(resultData.album)}`
+    metadata += `\ngenre=${resultData.album.genre.name}`
+    metadata += `\ndate=${resultData.album.release_date_original}`
+    metadata += `\nyear=${new Date(resultData.album.release_date_original).getFullYear()}`
+    metadata += `\nlabel=${getAlbum(resultData).label.name}`
+    metadata += `\ncopyright=${resultData.copyright}`
+    if (resultData.media_number) metadata += `\ndisc=${resultData.media_number}`;
     if (resultData.isrc) metadata += `\nisrc=${resultData.isrc}`;
     if (upc) metadata += `\nbarcode=${upc}`;
     if (resultData.track_number) metadata += `\ntrack=${resultData.track_number}`;
