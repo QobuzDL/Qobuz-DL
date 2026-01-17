@@ -1,4 +1,4 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
     images: {
@@ -8,9 +8,9 @@ const nextConfig: NextConfig = {
                 hostname: 'static.qobuz.com',
                 port: '',
                 pathname: '**',
-                search: '',
-            },
-        ],
+                search: ''
+            }
+        ]
     },
     async headers() {
         return [
@@ -18,21 +18,21 @@ const nextConfig: NextConfig = {
                 source: '/(.*)',
                 headers: [
                     {
-                        key: "Access-Control-Allow-Origin",
-                        value: "*",
+                        key: 'Access-Control-Allow-Origin',
+                        value: '*'
                     },
                     {
                         key: 'Cross-Origin-Opener-Policy',
-                        value: 'same-origin',
+                        value: 'same-origin'
                     },
                     {
                         key: 'Cross-Origin-Embedder-Policy',
-                        value: 'require-corp',
-                    },
-                ],
-            },
+                        value: 'require-corp'
+                    }
+                ]
+            }
         ];
-    },
+    }
 };
 
 export default nextConfig;

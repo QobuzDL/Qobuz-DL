@@ -7,25 +7,25 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export const formatBytes = (bytes: number): string => {
-    if (bytes === 0) return "0 Bytes";
+    if (bytes === 0) return '0 Bytes';
 
-    const sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB"];
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB'];
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
 
     const sizeInUnit = bytes / Math.pow(1024, i);
 
-    const formattedSize = new Intl.NumberFormat("en-US", {
-        maximumFractionDigits: i >= 3 ? 2 : 0,
+    const formattedSize = new Intl.NumberFormat('en-US', {
+        maximumFractionDigits: i >= 3 ? 2 : 0
     }).format(sizeInUnit);
 
     return `${formattedSize} ${sizes[i]}`;
 };
 
 export const cleanFileName = (filename: string) => {
-    const bannedChars = ["/", "\\", "?", ":", "*", '"', "<", ">", "|"];
+    const bannedChars = ['/', '\\', '?', ':', '*', '"', '<', '>', '|'];
     for (const char in bannedChars) {
-        filename = filename.replaceAll(bannedChars[char], "_");
-    };
+        filename = filename.replaceAll(bannedChars[char], '_');
+    }
     return filename;
 };
 
@@ -47,10 +47,10 @@ export function getTailwindBreakpoint(width: any) {
 
 export async function resizeImage(imageURL: string, maxSize: number, quality: number = 0.92): Promise<string | null> {
     return new Promise((resolve) => {
-        const canvas = document.createElement("canvas");
-        const context = canvas.getContext("2d");
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
         const imgToResize = new Image();
-        imgToResize.crossOrigin = "anonymous";
+        imgToResize.crossOrigin = 'anonymous';
         imgToResize.src = imageURL;
 
         imgToResize.onerror = () => resolve(null);
@@ -79,7 +79,7 @@ export async function resizeImage(imageURL: string, maxSize: number, quality: nu
 
             context!.drawImage(imgToResize, 0, 0, targetWidth, targetHeight);
 
-            const dataUrl = canvas.toDataURL("image/jpeg", quality);
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
             resolve(dataUrl);
         };
     });

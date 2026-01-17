@@ -1,28 +1,27 @@
-"use client"
+'use client';
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import type { StatusBarProps } from '@/components/status-bar/status-bar';
 
-const StatusBarContext = createContext<{
-    statusBar: StatusBarProps;
-    setStatusBar: React.Dispatch<React.SetStateAction<StatusBarProps>>;
-} | undefined>(undefined);
+const StatusBarContext = createContext<
+    | {
+          statusBar: StatusBarProps;
+          setStatusBar: React.Dispatch<React.SetStateAction<StatusBarProps>>;
+      }
+    | undefined
+>(undefined);
 
 export const StatusBarProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [statusBar, setStatusBar] = useState<StatusBarProps>({
-        title: "",
+        title: '',
         open: false,
         openPreference: true,
         progress: 0,
-        description: "",
+        description: '',
         processing: false,
         onCancel: () => {}
     });
 
-    return (
-        <StatusBarContext.Provider value={{ statusBar, setStatusBar }}>
-            {children}
-        </StatusBarContext.Provider>
-    );
+    return <StatusBarContext.Provider value={{ statusBar, setStatusBar }}>{children}</StatusBarContext.Provider>;
 };
 
 export const useStatusBar = () => {
@@ -31,6 +30,6 @@ export const useStatusBar = () => {
     if (!context) {
         throw new Error('useStatusBar must be used within a StatusBarProvider');
     }
-    
+
     return context;
 };

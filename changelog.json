@@ -1,5 +1,12 @@
 [
     {
+        "title": "Native Country Support",
+        "date": "09-27-2025",
+        "changes": [
+            "Countries can now natively be selected from the country picker (when enabled)! Multiple instances for different countries are no longer needed."
+        ]
+    },
+    {
         "title": "Custom Naming Variables & Reset Settings",
         "date": "04-07-2025",
         "changes": [

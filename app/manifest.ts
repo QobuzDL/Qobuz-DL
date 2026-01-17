@@ -15,8 +15,8 @@ export default function manifest(): MetadataRoute.Manifest {
             {
                 src: 'https://avatars.githubusercontent.com/u/181405705?s=200&v=4',
                 sizes: '200x200',
-                type: 'image/png',
-            },
-        ],
+                type: 'image/png'
+            }
+        ]
     };
 }
