@@ -97,7 +97,7 @@ Additionally, in order to download files longer than 30 seconds, a valid Qobuz t
 2. Create a new branch: `git checkout -b feature-name`.
 3. Make your changes.
 4. Push your branch: `git push origin feature-name`.
-5. Create a pull request.
+5. Create a pull 
 
 ## License
 
