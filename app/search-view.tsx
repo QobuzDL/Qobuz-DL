@@ -265,10 +265,10 @@ const SearchView = () => {
                     animate={logoAnimationControls}
                     transition={{ duration: 0.5 }}
                 >
-                    {process.env.NEXT_PUBLIC_APPLICATION_NAME!.toLowerCase() === 'qobuz-dl' ? (
+                    {process.env.NEXT_PUBLIC_APPLICATION_NAME?.toLowerCase() === 'qobuz-dl' ? (
                         <>
                             {mounted && logoSrc ? (
-                                <img src={logoSrc} alt={process.env.NEXT_PUBLIC_APPLICATION_NAME!} className='w-auto h-[100px] mx-auto z-[5]' />
+                                <img src={logoSrc} alt={process.env.NEXT_PUBLIC_APPLICATION_NAME || 'Logo'} className='w-auto h-[100px] mx-auto z-[5]' />
                             ) : (
                                 <div className='min-h-[100px] min-w-[10px]' />
                             )}

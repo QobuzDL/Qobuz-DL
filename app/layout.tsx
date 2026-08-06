@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     description: 'A frontend browser client for downloading music for Qobuz.',
     openGraph: {
         images:
-            process.env.NEXT_PUBLIC_APPLICATION_NAME!.toLowerCase() === 'qobuz-dl'
+            process.env.NEXT_PUBLIC_APPLICATION_NAME?.toLowerCase() === 'qobuz-dl'
                 ? [{ url: '/logo/qobuz-banner.png', width: 650, height: 195, alt: 'Qobuz Logo' }]
                 : []
     },

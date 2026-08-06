@@ -74,37 +74,21 @@ export const createDownloadJob = async (
                     const inputFile = response.data;
                     let outputFile = await applyMetadata(inputFile, result as QobuzTrack, ffmpegState, settings, setStatusBar);
                     if (settings.outputCodec === 'FLAC' && settings.fixMD5) outputFile = await fixMD5Hash(outputFile, setStatusBar);
-                    const objectURL = URL.createObjectURL(new Blob([outputFile]));
+                    
+                    // --- MODIFICACIÓN CLAVE ---
+                    // 1. Asignamos el MIME type correcto dinámicamente
+                    const mimeType = settings.outputCodec === 'FLAC' ? 'audio/flac' : settings.outputCodec === 'ALAC' ? 'audio/mp4' : 'audio/mpeg';
+                    const objectURL = URL.createObjectURL(new Blob([outputFile], { type: mimeType }));
                     const title = formattedTitle + '.' + codecMap[settings.outputCodec].extension;
-                    const audioElement = document.createElement('audio');
-                    audioElement.id = `track_${result.id}`;
-                    audioElement.src = objectURL;
-                    audioElement.onloadedmetadata = function () {
-                        if (Math.round(audioElement.duration) >= Math.round(result.duration)) {
-                            proceedDownload(objectURL, title);
-                            resolve();
-                        } else {
-                            toast({
-                                title: 'Error',
-                                description: `Qobuz provided a file shorter than expected for "${title}". This can indicate the file being a sample track rather than the full track`,
-                                duration: Infinity,
-                                action: (
-                                    <ToastAction
-                                        altText='Copy Stack'
-                                        onClick={() => {
-                                            proceedDownload(objectURL, title);
-                                        }}
-                                    >
-                                        Download anyway
-                                    </ToastAction>
-                                )
-                            });
-                            resolve();
-                        }
-                    };
-                    document.body.append(audioElement);
+                    
+                    // 2. Descargamos y resolvemos INMEDIATAMENTE sin usar el <audio>
+                    // Esto evita el "Background Throttling" del navegador
+                    proceedDownload(objectURL, title);
+                    resolve(undefined as any);
+                    // ---------------------------
+
                 } catch (e) {
-                    if (e instanceof AxiosError && e.code === 'ERR_CANCELED') resolve();
+                    if (e instanceof AxiosError && e.code === 'ERR_CANCELED') resolve(undefined as any);
                     else {
                         toast({
                             title: 'Error',
@@ -115,7 +99,7 @@ export const createDownloadJob = async (
                                 </ToastAction>
                             )
                         });
-                        resolve();
+                        resolve(undefined as any);
                     }
                 }
             });
@@ -229,7 +213,7 @@ export const createDownloadJob = async (
                     setStatusBar((statusBar) => ({ ...statusBar, progress: 0, description: `Zipping album...` }));
                     await new Promise((resolve) => setTimeout(resolve, 500));
                     const zipFiles = {
-                        'cover.jpg': new Uint8Array(albumArt),
+                        'cover.jpg': new Uint8Array(albumArt as ArrayBuffer),
                         ...trackBuffers.reduce(
                             (acc, buffer, index) => {
                                 if (buffer) {
@@ -251,9 +235,9 @@ export const createDownloadJob = async (
                     setTimeout(() => {
                         URL.revokeObjectURL(objectURL);
                     }, 100);
-                    resolve();
+                    resolve(undefined as any);
                 } catch (e) {
-                    if (e instanceof AxiosError && e.code === 'ERR_CANCELED') resolve();
+                    if (e instanceof AxiosError && e.code === 'ERR_CANCELED') resolve(undefined as any);
                     else {
                         toast({
                             title: 'Error',
@@ -264,7 +248,7 @@ export const createDownloadJob = async (
                                 </ToastAction>
                             )
                         });
-                        resolve();
+                        resolve(undefined as any);
                     }
                 }
             });
