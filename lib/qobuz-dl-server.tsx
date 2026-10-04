@@ -8,6 +8,7 @@ import axios from 'axios';
 const QOBUZ_ALBUM_URL_REGEX = /https:\/\/(play|open)\.qobuz\.com\/album\/[a-zA-Z0-9]+/;
 const QOBUZ_TRACK_URL_REGEX = /https:\/\/(play|open)\.qobuz\.com\/track\/\d+/;
 const QOBUZ_ARTIST_URL_REGEX = /https:\/\/(play|open)\.qobuz\.com\/artist\/\d+/;
+const QOBUZ_PLAYLIST_URL_REGEX = /https:\/\/(play|open)\.qobuz\.com\/playlist\/\d+/;
 
 let crypto: any;
 let SocksProxyAgent: any;
@@ -46,6 +47,9 @@ export async function search(query: string, limit: number = 10, offset: number =
     } else if (query.trim().match(QOBUZ_ARTIST_URL_REGEX)) {
         id = query.trim().match(QOBUZ_ARTIST_URL_REGEX)![0].replace('https://open', '').replace('https://play', '').replace('.qobuz.com/artist/', '');
         switchTo = 'artists';
+    } else if (query.trim().match(QOBUZ_PLAYLIST_URL_REGEX)) {
+        id = query.trim().match(QOBUZ_PLAYLIST_URL_REGEX)![0].replace('https://open', '').replace('https://play', '').replace('.qobuz.com/playlist/', '');
+        switchTo = 'playlists';
     }
     // Else, search Qobuz database for the song
     const url = new URL(process.env.QOBUZ_API_BASE + 'catalog/search');
@@ -66,8 +70,11 @@ export async function search(query: string, limit: number = 10, offset: number =
         httpsAgent: proxyAgent,
         ...requestOptions
     });
+    const playlists = response.data.playlists ?? { limit, offset, total: 0, items: [] };
     return {
         ...response.data,
+        // Playlists only ship cover mosaics, use the first one as the card image
+        playlists: { ...playlists, items: playlists.items.map((p: any) => ({ ...p, image: p.images300?.[0] ? { small: p.images300[0] } : null })) },
         switchTo
     } as QobuzSearchResults;
 }
@@ -187,4 +194,30 @@ export async function getDownloadURL(trackID: number, quality: string, options?:
         ...requestOptions
     });
     return response.data.url;
+}
+
+export async function getPlaylistInfo(playlist_id: string, options?: APIOptionProps) {
+    testForRequirements();
+    const { country, ...requestOptions } = options || {};
+    const token = country ? getTokenForCountry(country) : getRandomToken();
+
+    const url = new URL(process.env.QOBUZ_API_BASE + 'playlist/get');
+    url.searchParams.append('playlist_id', playlist_id);
+    url.searchParams.append('extra', 'tracks');
+    url.searchParams.append('limit', '500');
+    let proxyAgent = undefined;
+    if (process.env.SOCKS5_PROXY) {
+        proxyAgent = new SocksProxyAgent('socks5://' + process.env.SOCKS5_PROXY);
+    }
+    const response = await axios.get(process.env.CORS_PROXY ? process.env.CORS_PROXY + encodeURIComponent(url.toString()) : url.toString(), {
+        headers: {
+            'x-app-id': process.env.QOBUZ_APP_ID!,
+            'x-user-auth-token': token,
+            'User-Agent': process.env.CORS_PROXY ? 'Qobuz-DL' : undefined
+        },
+        httpAgent: proxyAgent,
+        httpsAgent: proxyAgent,
+        ...requestOptions
+    });
+    return response.data;
 }

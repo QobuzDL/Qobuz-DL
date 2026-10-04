@@ -5,9 +5,9 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import ReleaseCard from '@/components/release-card';
 import SearchBar from '@/components/search-bar/search-bar';
 import { Button } from '@/components/ui/button';
-import { Disc3Icon, DiscAlbumIcon, UsersIcon } from 'lucide-react';
+import { Disc3Icon, DiscAlbumIcon, ListMusicIcon, UsersIcon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { FilterDataType, filterExplicit, QobuzAlbum, QobuzArtist, QobuzSearchFilters, QobuzSearchResults, QobuzTrack } from '@/lib/qobuz-dl';
+import { FilterDataType, filterExplicit, QobuzAlbum, QobuzArtist, QobuzPlaylist, QobuzSearchFilters, QobuzSearchResults, QobuzTrack } from '@/lib/qobuz-dl';
 import { getTailwindBreakpoint } from '@/lib/utils';
 import { motion, useAnimation } from 'motion/react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -32,6 +32,11 @@ export const filterData: FilterDataType = [
         label: 'Artists',
         value: 'artists',
         icon: UsersIcon
+    },
+    {
+        label: 'Playlists',
+        value: 'playlists',
+        icon: ListMusicIcon
     }
 ];
 
@@ -324,7 +329,7 @@ const SearchView = () => {
                             }}
                         >
                             {filterExplicit(results, settings.explicitContent)[searchField].items.map(
-                                (result: QobuzAlbum | QobuzTrack | QobuzArtist, index: number) => {
+                                (result: QobuzAlbum | QobuzTrack | QobuzArtist | QobuzPlaylist, index: number) => {
                                     if (!result) return null;
                                     return (
                                         <ReleaseCard

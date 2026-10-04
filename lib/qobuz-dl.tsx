@@ -99,6 +99,25 @@ export type QobuzAlbum = {
     streamable: boolean;
 };
 
+export type QobuzPlaylist = {
+    id: number;
+    name: string;
+    description?: string;
+    image: { small: string } | null;
+    tracks_count: number;
+    duration: number;
+    owner: {
+        id: number;
+        name: string;
+    };
+    tracks?: {
+        offset: number;
+        limit: number;
+        total: number;
+        items: QobuzTrack[];
+    };
+};
+
 export type QobuzSearchResults = {
     query: string;
     switchTo: QobuzSearchFilters | null;
@@ -119,6 +138,12 @@ export type QobuzSearchResults = {
         offset: number;
         total: number;
         items: QobuzArtist[];
+    };
+    playlists: {
+        limit: number;
+        offset: number;
+        total: number;
+        items: QobuzPlaylist[];
     };
 };
 
@@ -169,18 +194,19 @@ export type FilterDataType = {
     icon: LucideIcon;
 }[];
 
-export type QobuzSearchFilters = 'albums' | 'tracks' | 'artists';
+export type QobuzSearchFilters = 'albums' | 'tracks' | 'artists' | 'playlists';
 
 export const QOBUZ_ALBUM_URL_REGEX = /https:\/\/(play|open)\.qobuz\.com\/album\/[a-zA-Z0-9]+/;
 export const QOBUZ_TRACK_URL_REGEX = /https:\/\/(play|open)\.qobuz\.com\/track\/\d+/;
 export const QOBUZ_ARTIST_URL_REGEX = /https:\/\/(play|open)\.qobuz\.com\/artist\/\d+/;
+export const QOBUZ_PLAYLIST_URL_REGEX = /https:\/\/(play|open)\.qobuz\.com\/playlist\/\d+/;
 
 export function getAlbum(input: QobuzAlbum | QobuzTrack | QobuzArtist) {
     return ((input as QobuzAlbum).image ? input : (input as QobuzTrack).album) as QobuzAlbum;
 }
 
-export function formatTitle(input: QobuzAlbum | QobuzTrack | QobuzArtist) {
-    return `${(input as QobuzAlbum | QobuzTrack).title ?? (input as QobuzArtist).name}${(input as QobuzAlbum | QobuzTrack).version ? ' (' + (input as QobuzAlbum | QobuzTrack).version + ')' : ''}`.trim();
+export function formatTitle(input: QobuzAlbum | QobuzTrack | QobuzArtist | QobuzPlaylist) {
+    return `${(input as QobuzAlbum | QobuzTrack).title ?? (input as QobuzArtist | QobuzPlaylist).name}${(input as QobuzAlbum | QobuzTrack).version ? ' (' + (input as QobuzAlbum | QobuzTrack).version + ')' : ''}`.trim();
 }
 
 export function getFullResImageUrl(input: QobuzAlbum | QobuzTrack) {
@@ -217,7 +243,8 @@ export function formatDuration(seconds: number) {
     return `${hours > 0 ? hours + 'h ' : ''} ${remainingMinutes > 0 ? remainingMinutes + 'm ' : ''} ${remainingSeconds > 0 && hours <= 0 ? remainingSeconds + 's' : ''}`.trim();
 }
 
-export function getType(input: QobuzAlbum | QobuzTrack | QobuzArtist): QobuzSearchFilters {
+export function getType(input: QobuzAlbum | QobuzTrack | QobuzArtist | QobuzPlaylist): QobuzSearchFilters {
+    if ('owner' in input) return 'playlists';
     if ('albums_count' in input) return 'artists';
     if ('album' in input) return 'tracks';
     return 'albums';

@@ -4,8 +4,8 @@ import { applyMetadata, codecMap, FFmpegType, fixMD5Hash, loadFFmpeg } from './f
 import { artistReleaseCategories } from '@/components/artist-dialog';
 import { cleanFileName, formatBytes, formatCustomTitle, resizeImage } from './utils';
 import { createJob } from './status-bar/jobs';
-import { Disc3Icon, DiscAlbumIcon } from 'lucide-react';
-import { FetchedQobuzAlbum, formatTitle, getFullResImageUrl, QobuzAlbum, QobuzArtistResults, QobuzTrack } from './qobuz-dl';
+import { Disc3Icon, DiscAlbumIcon, ListMusicIcon } from 'lucide-react';
+import { FetchedQobuzAlbum, formatTitle, getFullResImageUrl, QobuzAlbum, QobuzArtistResults, QobuzPlaylist, QobuzTrack } from './qobuz-dl';
 import { SettingsProps } from './settings-provider';
 import { StatusBarProps } from '@/components/status-bar/status-bar';
 import { ToastAction } from '@/components/ui/toast';
@@ -191,7 +191,16 @@ export const createDownloadJob = async (
                     let totalBytesDownloaded = 0;
                     setStatusBar((statusBar) => ({ ...statusBar, progress: 0, description: `Fetching album art...` }));
                     const albumArtURL = await resizeImage(getFullResImageUrl(fetchedAlbumData!), settings.albumArtSize, settings.albumArtQuality);
-                    const albumArt = albumArtURL ? (await axios.get(albumArtURL, { responseType: 'arraybuffer' })).data : false;
+                    const albumArt = albumArtURL
+                        ? await axios
+                              .get(albumArtURL, { responseType: 'arraybuffer', signal })
+                              .then((r) => r.data)
+                              .catch((e) => {
+                                  if (e instanceof AxiosError && e.code === 'ERR_CANCELED') throw e;
+                                  console.warn('Failed to fetch album art, continuing without it:', e);
+                                  return false;
+                              })
+                        : false;
                     for (const [index, url] of albumUrls.entries()) {
                         if (url) {
                             const response = await axios.get(url, {
@@ -270,6 +279,78 @@ export const createDownloadJob = async (
             });
         });
     }
+};
+
+export const createPlaylistZipJob = async (
+    playlist: QobuzPlaylist,
+    tracks: QobuzTrack[],
+    setStatusBar: React.Dispatch<React.SetStateAction<StatusBarProps>>,
+    ffmpegState: FFmpegType,
+    settings: SettingsProps,
+    toast: (toast: any) => void,
+    country?: string
+) => {
+    const zipTitle = cleanFileName(formatTitle(playlist));
+    const streamableTracks = tracks.filter((track) => track.streamable);
+    await createJob(setStatusBar, zipTitle, ListMusicIcon, async () => {
+        return new Promise(async (resolve) => {
+            try {
+                const controller = new AbortController();
+                const signal = controller.signal;
+                setStatusBar((prev) => ({
+                    ...prev,
+                    progress: 0,
+                    title: `Downloading ${zipTitle}`,
+                    description: `Loading FFmpeg...`,
+                    onCancel: () => controller.abort()
+                }));
+                if (
+                    settings.applyMetadata ||
+                    !((settings.outputQuality === '27' && settings.outputCodec === 'FLAC') || (settings.bitrate === 320 && settings.outputCodec === 'MP3'))
+                )
+                    await loadFFmpeg(ffmpegState, signal);
+                const zipFiles = {} as { [key: string]: Uint8Array };
+                const padLength = Math.max(String(streamableTracks.length).length, 2);
+                // ponytail: progress counts finished tracks, not bytes (skips one HEAD request per track)
+                for (const [index, track] of streamableTracks.entries()) {
+                    setStatusBar((prev) => ({
+                        ...prev,
+                        progress: Math.floor((index / streamableTracks.length) * 100),
+                        description: `Track ${index + 1} / ${streamableTracks.length}: ${formatTitle(track)}`
+                    }));
+                    const fileURLResponse = await axios.get('/api/download-music', {
+                        params: { track_id: track.id, quality: settings.outputQuality },
+                        headers: { 'Token-Country': country },
+                        signal
+                    });
+                    const response = await axios.get(fileURLResponse.data.data.url, { responseType: 'arraybuffer', signal });
+                    // No shared cover for a playlist: applyMetadata fetches each track's own album art
+                    let outputFile = await applyMetadata(response.data, track, ffmpegState, settings);
+                    if (settings.outputCodec === 'FLAC' && settings.fixMD5) outputFile = await (await fixMD5Hash(outputFile)).arrayBuffer();
+                    const fileName = `${String(index + 1).padStart(padLength, '0')} ${formatCustomTitle(settings.trackName, track)}.${codecMap[settings.outputCodec].extension}`;
+                    zipFiles[cleanFileName(fileName)] = new Uint8Array(outputFile);
+                }
+                setStatusBar((prev) => ({ ...prev, progress: 100, description: `Zipping playlist...` }));
+                const zipBlob = new Blob([zipSync(zipFiles, { level: 0 }) as BlobPart], { type: 'application/zip' });
+                proceedDownload(URL.createObjectURL(zipBlob), zipTitle + '.zip');
+                resolve();
+            } catch (e) {
+                if (e instanceof AxiosError && e.code === 'ERR_CANCELED') resolve();
+                else {
+                    toast({
+                        title: 'Error',
+                        description: e instanceof Error ? e.message : 'An unknown error occurred',
+                        action: (
+                            <ToastAction altText='Copy Stack' onClick={() => navigator.clipboard.writeText((e as Error).stack!)}>
+                                Copy Stack
+                            </ToastAction>
+                        )
+                    });
+                    resolve();
+                }
+            }
+        });
+    });
 };
 
 function proceedDownload(objectURL: string, title: string) {

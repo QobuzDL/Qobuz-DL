@@ -4,13 +4,14 @@ import { DownloadIcon, FileArchiveIcon, MusicIcon } from 'lucide-react';
 import { StatusBarProps } from './status-bar/status-bar';
 import { FFmpegType } from '@/lib/ffmpeg-functions';
 import { SettingsProps } from '@/lib/settings-provider';
-import { FetchedQobuzAlbum, formatTitle, getFullAlbumInfo, QobuzAlbum } from '@/lib/qobuz-dl';
-import { createDownloadJob } from '@/lib/download-job';
+import axios from 'axios';
+import { FetchedQobuzAlbum, formatTitle, getFullAlbumInfo, getType, QobuzAlbum, QobuzPlaylist, QobuzTrack } from '@/lib/qobuz-dl';
+import { createDownloadJob, createPlaylistZipJob } from '@/lib/download-job';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { useCountry } from '@/lib/country-provider';
 
 export interface DownloadAlbumButtonProps extends ButtonProps {
-    result: QobuzAlbum;
+    result: QobuzAlbum | QobuzPlaylist;
     setStatusBar: React.Dispatch<React.SetStateAction<StatusBarProps>>;
     ffmpegState: FFmpegType;
     settings: SettingsProps;
@@ -47,6 +48,10 @@ const DownloadButton = React.forwardRef<HTMLButtonElement, DownloadAlbumButtonPr
             if (open) onOpen?.();
             else onClose?.();
         });
+        const isPlaylist = getType(result) === 'playlists';
+        const getPlaylistTracks = async (): Promise<QobuzTrack[]> =>
+            (await axios.get('/api/get-playlist', { params: { playlist_id: result.id }, headers: { 'Token-Country': country } })).data.data.tracks.items;
+        const album = result as QobuzAlbum;
         return (
             <>
                 <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -57,8 +62,21 @@ const DownloadButton = React.forwardRef<HTMLButtonElement, DownloadAlbumButtonPr
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
                         <DropdownMenuItem
-                            onClick={() => {
-                                createDownloadJob(result, setStatusBar, ffmpegState, settings, toast, fetchedAlbumData, setFetchedAlbumData, country);
+                            onClick={async () => {
+                                if (isPlaylist) {
+                                    toast({ title: `Added '${formatTitle(result)}'`, description: 'The playlist has been added to the queue' });
+                                    createPlaylistZipJob(
+                                        result as QobuzPlaylist,
+                                        await getPlaylistTracks(),
+                                        setStatusBar,
+                                        ffmpegState,
+                                        settings,
+                                        toast,
+                                        country
+                                    );
+                                    return;
+                                }
+                                createDownloadJob(album, setStatusBar, ffmpegState, settings, toast, fetchedAlbumData, setFetchedAlbumData, country);
                                 toast({
                                     title: `Added '${formatTitle(result)}'`,
                                     description: 'The album has been added to the queue'
@@ -71,7 +89,16 @@ const DownloadButton = React.forwardRef<HTMLButtonElement, DownloadAlbumButtonPr
                         </DropdownMenuItem>
                         <DropdownMenuItem
                             onClick={async () => {
-                                const albumData = await getFullAlbumInfo(fetchedAlbumData, setFetchedAlbumData, result, country);
+                                if (isPlaylist) {
+                                    const tracks = (await getPlaylistTracks()).filter((track) => track.streamable);
+                                    toast({ title: `Added '${formatTitle(result)}'`, description: `${tracks.length} tracks have been added to the queue` });
+                                    for (const track of tracks) {
+                                        await createDownloadJob(track, setStatusBar, ffmpegState, settings, toast, undefined, undefined, country);
+                                        await new Promise((resolve) => setTimeout(resolve, 100));
+                                    }
+                                    return;
+                                }
+                                const albumData = await getFullAlbumInfo(fetchedAlbumData, setFetchedAlbumData, album, country);
                                 for (const track of albumData.tracks.items) {
                                     if (track.streamable) {
                                         await createDownloadJob(
