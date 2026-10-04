@@ -5,9 +5,9 @@ import z from 'zod';
 const releasesParamsSchema = z.object({
     artist_id: z.string().min(1, 'ID is required'),
     release_type: z.enum(['album', 'live', 'compilation', 'epSingle', 'download']).default('album'),
-    track_size: z.number().positive().default(1000),
-    offset: z.preprocess((a) => parseInt(a as string), z.number().positive().default(0)),
-    limit: z.preprocess((a) => parseInt(a as string), z.number().positive().default(10))
+    track_size: z.coerce.number().int().positive().default(1000),
+    offset: z.coerce.number().int().min(0, 'Offset must be 0 or greater').default(0),
+    limit: z.coerce.number().int().positive().default(10)
 });
 
 export async function GET(request: NextRequest) {
